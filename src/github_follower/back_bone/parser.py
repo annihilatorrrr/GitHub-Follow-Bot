@@ -63,24 +63,21 @@ class Parser(threading.Thread):
     def get_setting(self, key):
         import gf.models as mdl
 
-        val = mdl.Setting.get(key = key)
-
-        return val
+        return mdl.Setting.get(key = key)
 
     @sync_to_async
     def get_filtered(self, otype, params = {}, related = [], sort = []):
         if len(params) < 1:
             return list(otype.objects.all().distinct())
-        else:
-            items = otype.objects.filter(**params)
+        items = otype.objects.filter(**params)
 
-            if len(related) > 0:
-                items = items.select_related(related)
+        if len(related) > 0:
+            items = items.select_related(related)
 
-            if len(sort) > 0:
-                items = items.order_by(sort)
+        if len(sort) > 0:
+            items = items.order_by(sort)
 
-            return list(items)
+        return list(items)
 
 
     async def do_fail(self):
@@ -102,8 +99,8 @@ class Parser(threading.Thread):
             return
 
         if int(await self.get_setting("verbose")) >= 3:
-            print("[VVV] Adding fail (" + str(self.api.fails) + " > " + str(max_fails) + ").")
-        
+            print(f"[VVV] Adding fail ({str(self.api.fails)} > {max_fails}).")
+
         #  If fail count exceeds max fails setting, set locked to True and stop everything.
         if self.api.fails >= max_fails:
             self.running = False
@@ -177,7 +174,10 @@ class Parser(threading.Thread):
 
             # Try sending request to GitHub API.
             try:
-                res = await self.api.send("GET", '/users/' + user.username + '/followers?page=' + str(page))
+                res = await self.api.send(
+                    "GET", f'/users/{user.username}/followers?page={str(page)}'
+                )
+
             except Exception as e:
                 print("[ERR] Failed to retrieve user's following list for " + user.username + " (request failure).")
                 print(e)
@@ -187,7 +187,7 @@ class Parser(threading.Thread):
                 break
 
             # Check status code.
-            if res[1] != 200 and res[1] != 204:
+            if res[1] not in [200, 204]:
                 await self.do_fail()
 
                 break
@@ -242,7 +242,7 @@ class Parser(threading.Thread):
 
             # Increment page
             page = page + 1
-            
+
             await asyncio.sleep(float(random.randint(int(await self.get_setting("wait_time_list_min")), int(await self.get_setting("wait_time_list_max")))))
 
     async def loop_and_follow_targets(self, user):
@@ -277,10 +277,9 @@ class Parser(threading.Thread):
         if bool(int(await self.get_setting("seed"))) and not self.locked:
             if self.retrieve_and_save_task is None or self.retrieve_and_save_task.done():
                 self.retrieve_and_save_task = asyncio.create_task(self.retrieve_and_save_followers(user))
-        else:
-            if self.retrieve_and_save_task is not None and self.retrieve_and_save_task in asyncio.all_tasks():
-                self.retrieve_and_save_task.cancel()
-                self.retrieve_and_save_task = None
+        elif self.retrieve_and_save_task is not None and self.retrieve_and_save_task in asyncio.all_tasks():
+            self.retrieve_and_save_task.cancel()
+            self.retrieve_and_save_task = None
 
         follow_targets_task = asyncio.create_task(self.loop_and_follow_targets(user))
 
@@ -318,7 +317,7 @@ class Parser(threading.Thread):
                         # Check if we're expired.
                         if now > expired:
                             if int(await self.get_setting("verbose")) >= 3:
-                                print("[VVV] " + user.user.username + " has expired.")
+                                print(f"[VVV] {user.user.username} has expired.")
 
                             # Unfollow used and mark them as purged.
                             await tuser.unfollow_user(user.user)
@@ -349,7 +348,7 @@ class Parser(threading.Thread):
 
                 # Authenticate.
                 self.api.authenticate(user.user.username, user.token)
-                
+
                 page = 1
 
                 # We'll want to create a loop through of the target user's followers.
@@ -358,7 +357,7 @@ class Parser(threading.Thread):
 
                     # Make connection.
                     try:
-                        res = await self.api.send("GET", '/user/followers?page=' + str(page))
+                        res = await self.api.send("GET", f'/user/followers?page={str(page)}')
                     except Exception as e:
                         print("[ERR] Failed to retrieve target user's followers list for " + user.user.username + " (request failure).")
                         print(e)
@@ -368,7 +367,7 @@ class Parser(threading.Thread):
                         break
 
                     # Check status code.
-                    if res[1] != 200 and res[1] != 204:
+                    if res[1] not in [200, 204]:
                         await self.do_fail()
 
                         break
@@ -436,15 +435,13 @@ class Parser(threading.Thread):
 
                         if exists and tmp is None:
                             exists = False
-                        
-                        # Check if target user is following this user.
-                        if exists:
-                            #  Check for remove following setting. If enabled, unfollow user.
-                            if user.remove_following:
-                                await user.unfollow_user(muser)
 
-                                # We'll want to wait the follow period.
-                                await asyncio.sleep(float(random.randint(int(await self.get_setting("wait_time_follow_min")), int(await self.get_setting("wait_time_follow_max")))))
+                        # Check if target user is following this user.
+                        if exists and user.remove_following:
+                            await user.unfollow_user(muser)
+
+                            # We'll want to wait the follow period.
+                            await asyncio.sleep(float(random.randint(int(await self.get_setting("wait_time_follow_min")), int(await self.get_setting("wait_time_follow_max")))))
 
                     # Increment page
                     page = page + 1
@@ -460,10 +457,7 @@ class Parser(threading.Thread):
             max_users = int(await self.get_setting("max_scan_users"))
 
             # Loop for target GitHub usernames to exclude from parsing list.
-            gnames = []
-
-            for user in target_users:
-                gnames.append(user.user.username)
+            gnames = [user.user.username for user in target_users]
 
             # Retrieve users excluding target users.
             users = await self.get_users(gnames)

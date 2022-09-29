@@ -14,13 +14,13 @@ class Setting(models.Model):
     key = models.CharField(verbose_name = "Key", help_text="The setting key.", max_length = 64, unique = True)
     val = models.CharField(verbose_name = "Value", help_text="The setting value.", max_length = 64)
 
-    def create(key, val, override):
+    def create(self, val, override):
         item = None
 
         exists = True
 
         try:
-            item = Setting.objects.filter(key = key)[0]
+            item = Setting.objects.filter(self=self)[0]
         except Exception:
             exists = False
 
@@ -30,29 +30,26 @@ class Setting(models.Model):
         if exists:
             # Make sure we want to override.
             if not override:
-                return 
+                return
         else:
-            item = Setting(key = key)
+            item = Setting(self=self)
 
         # Set value and save.
         item.val = val
         item.save()
 
-    def get(key):
-        val = None
+    def get(self):
         exists = True
 
         try:
-            item = Setting.objects.filter(key = key)[0]
+            item = Setting.objects.filter(self=self)[0]
         except Exception:
             exists = False
 
         if exists and item is None:
             exists = False
 
-        if exists:
-            val  = str(item.val)
-
+        val = str(item.val) if exists else None
         return val
 
     def __str__(self):
@@ -75,7 +72,7 @@ class User(models.Model):
         try:
             super().save(*args, **kwargs)
         except Exception as e:
-            print("[ERR] Error saving user (" + self.username + ").")
+            print(f"[ERR] Error saving user ({self.username}).")
             print(e)
 
             return
@@ -108,9 +105,15 @@ class Target_User(models.Model):
 
         # Send request.
         try:
-            res = await back_bone.parser.api.send('PUT', '/user/following/' + user.username)
+            res = await back_bone.parser.api.send(
+                'PUT', f'/user/following/{user.username}'
+            )
+
         except Exception as e:
-            print("[ERR] Failed to follow GitHub user " + user.username + " for " + self.user.username + " (request failure).")
+            print(
+                f"[ERR] Failed to follow GitHub user {user.username} for {self.user.username} (request failure)."
+            )
+
             print(e)
 
             await back_bone.parser.do_fail()
@@ -118,7 +121,7 @@ class Target_User(models.Model):
             return
 
         # Check status code.
-        if res[1] != 200 and res[1] != 204:
+        if res[1] not in [200, 204]:
             await back_bone.parser.do_fail()
 
             return
@@ -127,7 +130,7 @@ class Target_User(models.Model):
         await sync_to_async(Following.objects.create)(target_user = self, user = user)
 
         if int(await sync_to_async(Setting.get)(key = "verbose")) >= 1:
-            print("[V] Following user " + user.username + " for " + self.user.username + ".")
+            print(f"[V] Following user {user.username} for {self.user.username}.")
 
     @sync_to_async
     def get_following(self, user):
@@ -157,9 +160,15 @@ class Target_User(models.Model):
 
         # Send request.
         try:
-            res = await back_bone.parser.api.send('DELETE', '/user/following/' + user.username)
+            res = await back_bone.parser.api.send(
+                'DELETE', f'/user/following/{user.username}'
+            )
+
         except Exception as e:
-            print("[ERR] Failed to unfollow GitHub user " + user.username + " for " + self.user.username + " (request failure).")
+            print(
+                f"[ERR] Failed to unfollow GitHub user {user.username} for {self.user.username} (request failure)."
+            )
+
             print(e)
 
             await back_bone.parser.do_fail()
@@ -167,7 +176,7 @@ class Target_User(models.Model):
             return
 
         # Check status code.
-        if res[1] != 200 and res[1] != 204:
+        if res[1] not in [200, 204]:
             await back_bone.parser.do_fail()
 
             return
@@ -182,7 +191,7 @@ class Target_User(models.Model):
             await sync_to_async(following.save)()
 
         if int(await sync_to_async(Setting.get)(key = "verbose")) >= 2:
-            print("[VV] Unfollowing user " + user.username + " from " + self.user.username + ".")
+            print(f"[VV] Unfollowing user {user.username} from {self.user.username}.")
 
     class Meta:
         verbose_name = "Target User"

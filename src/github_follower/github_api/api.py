@@ -31,7 +31,7 @@ class GH_API():
         self.fails = self.fails + 1
 
     def authenticate(self, user, token):
-        mix = user + ":" + token
+        mix = f"{user}:{token}"
 
         r = base64.b64encode(bytes(mix, encoding='utf8'))
 
@@ -81,6 +81,6 @@ class GH_API():
             # Set fails to 0 indicating we closed the connection.
             if not failed and res is not None:
                 self.fails = 0
-        
+
         # Return list (response, response code)
         return [res, status]
